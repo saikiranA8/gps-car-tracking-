@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+
+{% block title %}GPS Car Tracker | Devices{% endblock %}
+
+{% block extra_css %}{% endblock %}
+
+{% block content %}
+<div class="d-flex">
+    <div>
+        <h1 class="mt-4"><span class="text-warning">{{ device.name }}</span> detail</h1> 
+    </div>
+    <div class="ms-auto mt-4">
+        <a type="button" class="btn btn-warning" href="{% url 'tracker:index' %}">
+            Back
+        </a>
+        <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#logs" id="logbutton">
+            Logs
+        </button>
+    </div>
+</div>
+<hr>
+<div class="row">
+    <div class="col-sm-3">
+        <div class="card shadow">
+            <div class="card-body">
+                <p class="card-text">{{ device.descriptions }}</p>
+            </div>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item"><strong>Cell Number: </strong> {{ device.cellnumber }}</li>
+                <li class="list-group-item"><strong>Token: </strong>{{ device.token }}</li>
+                <li class="list-group-item"><strong>Created: </strong> {{ device.created_date|date:"Y/m/d - H:i" }}</li>
+                <li class="list-group-item"><strong>API key: </strong> {{ api_key }}</li>
+                <li class="list-group-item">
+                    <strong>Last Location: </strong>
+                    <a class="btn btn-sm btn-warning" id="open-map" href="https://maps.app.goo.gl/mg9pEvZECDMRiahc9" target="_blank">Open in Google Map</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+    <div class="col-sm-9">
+        <div class="card shadow">
+            <div class="card-body">
+                <div style="width:100%; height:500px;" id="map"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="logs" aria-hidden="true" aria-labelledby="logsModalToggleLabel" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="logsModalToggleLabel">Logs</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">Latitude</th>
+                                <th scope="col">Longitude</th>
+                                <th scope="col">Created_time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="list-wrapper">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAgTs-y4kezEz3UNQtVyv7H80lK7mQJLdg&v=weekly"></script>
+<script>
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    let csrftoken = getCookie('csrftoken');
+    var list_snapshot = [];
+
+    async function buildList() {
+        var wrapper = document.getElementById('list-wrapper');
+        $(wrapper).empty();
+        const token = "{{ device.token }}";
+        const url = `/tracker/api/device/${token}/coordinate`;
+        const response = await fetch(url);
+        const data = await response.json();
+        list_snapshot = data;
+
+        list_snapshot.forEach((item, i) => {
+            const lat = item.lat;
+            const lon = item.lon;
+            const created_date = new Date(item.created_date).toISOString().slice(0, 16).replace('T', ' ');
+            const row = `<tr>
+                <th scope="row">${i}</th>
+                <td>${lat}</td>
+                <td>${lon}</td>
+                <td>${created_date}</td>
+            </tr>`;
+            wrapper.innerHTML += row;
+        });
+
+        const currentBtn = document.getElementById('open-map');
+        if (list_snapshot.length > 0) {
+            const { lat, lon } = list_snapshot[0];
+            currentBtn.href = `https://maps.app.goo.gl/LT1SXwrYuYpSDFxLA=${lat},${lon}`;
+        }
+    }
+
+    async function initMap() {
+        await buildList();
+        if (list_snapshot.length > 0) {
+            const { lat, lon } = list_snapshot[0];
+            const map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 14,
+                center: new google.maps.LatLng(lat, lon),
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            });
+
+            list_snapshot.forEach((item) => {
+                new google.maps.Marker({
+                    position: new google.maps.LatLng(item.lat, item.lon),
+                    map: map,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 8.5,
+                        fillColor: "#F00",
+                        fillOpacity: 0.8,
+                        strokeWeight: 0.4
+                    }
+                });
+            });
+        }
+    }
+
+    setInterval(initMap, 60000);
+    initMap();
+</script>
+{% endblock %}
+
